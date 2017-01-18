@@ -71,7 +71,8 @@
 	       (decl ((r :type float))))
        (function (lib_init () "static struct lib_state*")
 		 (let ((state :type "struct lib_state*"
-			      :init (funcall malloc (funcall sizeof *state))))
+			      :init (cast "struct lib_state*"
+					  (funcall malloc (funcall sizeof *state)))))
 		   (return state)))
        (function (lib_reload ((state :type "struct lib_state*")) "static void")
 		 (raw "//"))
