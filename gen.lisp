@@ -94,6 +94,14 @@
   (sb-ext:run-program "/usr/bin/clang-format" (list "-i" (namestring *lib-h-filename*))))
 
 
+(defmacro function-prefix (prefix &body body)
+  `(with-compilation-unit ,@(mapcar (lambda (x) (if (eq 'function (first x))
+						    (destructuring-bind (fun_ (name params &optional ret &key ctor specifier) &rest function-body) x
+						      `(function (,(intern (format nil "~a_~a" prefix name))
+								   ,params ,ret :ctor ,ctor :specifier ,specifier)
+								 ,@function-body))
+						    x)) body)))
+
 (progn
   (defparameter *main-cpp-filename*  (merge-pathnames "stage/gen-glfw/source/main.cpp"
 						   (user-homedir-pathname)))
@@ -111,6 +119,11 @@
     `(with-compilation-unit
 	 (include "GLFW/glfw3.h")
        (decl ((g_app_main_loop_running :type int :init GL_TRUE)))
+       (struct plugin_view_lib ())
+       (macroexpand (function-prefix plugin_view_lib
+			     (function (load ((lib :type "struct lib*")) "static void"))
+			     ))
+       
        (function (glfw_key_handler_cb ((window :type GLFWwindow*)
 				       (key :type int)
 				       (scancode :type int)
@@ -138,8 +151,7 @@
 			    (funcall glVertex3f 1.0 1.0 1.0)))
 			 (funcall glfwSwapBuffers main_window)
 			 (funcall glfwPollEvents))))
-		 (return 0))
-       )))
+		 (return 0)))))
   (sb-ext:run-program "/usr/bin/clang-format" (list "-i" (namestring *main-cpp-filename*))))
 
 
