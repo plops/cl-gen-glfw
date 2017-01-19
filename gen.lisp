@@ -29,6 +29,13 @@
 ;; https://bitbucket.org/alfonse/glloadgen/wiki/Home
 ;; http://nullprogram.com/blog/2014/12/23/ Interactive Programming in C
 
+(defmacro function-prefix (prefix &body body)
+  `(with-compilation-unit ,@(mapcar (lambda (x) (if (eq 'function (first x))
+						    (destructuring-bind (fun_ (name params &optional ret &key ctor specifier) &rest function-body) x
+						      `(function (,(intern (string-upcase (format nil "~a_~a" prefix name)))
+								   ,params ,ret :ctor ,ctor :specifier ,specifier)
+								 ,@function-body))
+						    x)) body)))
 
 (progn
   (defparameter *lib-h-filename*  (merge-pathnames "stage/gen-glfw/source/lib.h"
@@ -94,13 +101,8 @@
   (sb-ext:run-program "/usr/bin/clang-format" (list "-i" (namestring *lib-h-filename*))))
 
 
-(defmacro function-prefix (prefix &body body)
-  `(with-compilation-unit ,@(mapcar (lambda (x) (if (eq 'function (first x))
-						    (destructuring-bind (fun_ (name params &optional ret &key ctor specifier) &rest function-body) x
-						      `(function (,(intern (string-upcase (format nil "~a_~a" prefix name)))
-								   ,params ,ret :ctor ,ctor :specifier ,specifier)
-								 ,@function-body))
-						    x)) body)))
+
+
 
 (progn
   (defparameter *main-cpp-filename*  (merge-pathnames "stage/gen-glfw/source/main.cpp"
@@ -139,10 +141,13 @@
 				      (statements
 				       (if (slot->value lib handle)
 					   (statements
+					    #+nil
 					    (funcall
 					     (slot-value (slot->value lib api) unload
 							 )
-					     (slot->value lib state))))))))
+					     (slot->value lib state))
+					    (funcall lib->api.unload lib->state)
+					    (funcall dlclose lib->handle)))))))
 			     ))
        
        (function (glfw_key_handler_cb ((window :type GLFWwindow*)
