@@ -66,7 +66,7 @@
     :code 
     `(with-compilation-unit
 	 (include "lib.h")
-       (include "stdlib.h")
+       (include <stdlib.h>)
        (struct lib_state ()
 	       (decl ((r :type float))))
        (function (lib_init () "static struct lib_state*")
@@ -97,7 +97,7 @@
 (defmacro function-prefix (prefix &body body)
   `(with-compilation-unit ,@(mapcar (lambda (x) (if (eq 'function (first x))
 						    (destructuring-bind (fun_ (name params &optional ret &key ctor specifier) &rest function-body) x
-						      `(function (,(intern (format nil "~a_~a" prefix name))
+						      `(function (,(intern (string-upcase (format nil "~a_~a" prefix name)))
 								   ,params ,ret :ctor ,ctor :specifier ,specifier)
 								 ,@function-body))
 						    x)) body)))
@@ -117,11 +117,32 @@
    
     :code 
     `(with-compilation-unit
+	 (include "lib.h")
 	 (include "GLFW/glfw3.h")
+       (include <sys/types.h>)
+       (include <sys/stat.h>)
+       (include <dlfcn.h>)
        (decl ((g_app_main_loop_running :type int :init GL_TRUE)))
-       (struct plugin_view_lib ())
+       (struct plugin_view_lib ()
+	       (decl ((handle :type void*)
+		      (id :type ino_t)
+		      (api :type "struct lib_api"
+			   )
+		      (state :type "struct lib_state*"))))
+       (decl ((g_lib_library_filename :type "const char*" :init (string "./libview.so"))))
        (macroexpand (function-prefix plugin_view_lib
-			     (function (load ((lib :type "struct lib*")) "static void"))
+		      (function (load ((lib :type "struct plugin_view_lib*")) "static void")
+				(let ((attr :type "struct stat"
+					    ))
+				  (if (&& (== 0 (funcall stat g_lib_library_filename &attr))
+					  (!= (slot->value lib id) (slot-value attr st_ino)))
+				      (statements
+				       (if (slot->value lib handle)
+					   (statements
+					    (funcall
+					     (slot-value (slot->value lib api) unload
+							 )
+					     (slot->value lib state))))))))
 			     ))
        
        (function (glfw_key_handler_cb ((window :type GLFWwindow*)
