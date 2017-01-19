@@ -90,7 +90,7 @@
 		 (funcall free state))
        (function (lib_step ((state :type "struct lib_state*")) "static int")
 		 (return 1))
-       (decl ((GAME_API :type "const struct lib_api" :init
+       (decl ((LIB_API :type "const struct lib_api" :init
 			(list lib_init
 			      lib_finalize
 			      lib_reload
@@ -141,13 +141,16 @@
 				      (statements
 				       (if (slot->value lib handle)
 					   (statements
-					    #+nil
-					    (funcall
-					     (slot-value (slot->value lib api) unload
-							 )
-					     (slot->value lib state))
 					    (funcall lib->api.unload lib->state)
-					    (funcall dlclose lib->handle)))))))
+					    (funcall dlclose lib->handle)))
+				       (let ((handle :type void* :init (funcall dlopen g_lib_library_filename RTLD_NOW)))
+					 (if handle
+					     (statements
+					      (setf lib->handle handle
+						    lib->id attr.st_ino)
+					      (let ((lib_api :type "const struct lib_api*" :init (funcall "reinterpret_cast<struct lib_api*>" (funcall dlsym lib->handle (string "LIB_API")))
+						      ))))
+					     ))))))
 			     ))
        
        (function (glfw_key_handler_cb ((window :type GLFWwindow*)
