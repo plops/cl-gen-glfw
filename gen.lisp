@@ -30,12 +30,16 @@
 ;; http://nullprogram.com/blog/2014/12/23/ Interactive Programming in C
 
 (defmacro function-prefix (prefix &body body)
-  `(with-compilation-unit ,@(mapcar (lambda (x) (if (eq 'function (first x))
-						    (destructuring-bind (fun_ (name params &optional ret &key ctor specifier) &rest function-body) x
-						      `(function (,(intern (string-upcase (format nil "~a_~a" prefix name)))
-								   ,params ,ret :ctor ,ctor :specifier ,specifier)
-								 ,@function-body))
-						    x)) body)))
+  `(with-compilation-unit
+       ,@(mapcar
+	  (lambda (x)
+	    (if (eq 'function (first x))
+		(destructuring-bind (fun_ (name params &optional ret &key ctor specifier)
+					  &rest function-body) x
+		  `(function (,(intern (string-upcase (format nil "~a_~a" prefix name)))
+			       ,params ,ret :ctor ,ctor :specifier ,specifier)
+			     ,@function-body))
+		x)) body)))
 
 (progn
   (defparameter *lib-h-filename*  (merge-pathnames "stage/gen-glfw/source/lib.h"
@@ -89,6 +93,7 @@
        (function (lib_finalize ((state :type "struct lib_state*")) "static void")
 		 (funcall free state))
        (function (lib_step ((state :type "struct lib_state*")) "static int")
+		 (+= state->r .2)
 		 (return 1))
        (decl ((LIB_API :type "const struct lib_api" :init
 			(list lib_init
@@ -124,6 +129,8 @@
        (include <sys/types.h>)
        (include <sys/stat.h>)
        (include <dlfcn.h>)
+       (include <iostream>)
+       
        (decl ((g_app_main_loop_running :type int :init GL_TRUE)))
        (struct plugin_view_lib ()
 	       (decl ((handle :type void*)
@@ -134,8 +141,7 @@
        (decl ((g_lib_library_filename :type "const char*" :init (string "./libview.so"))))
        (macroexpand (function-prefix plugin_view_lib
 		      (function (load ((lib :type "struct plugin_view_lib*")) "static void")
-				(let ((attr :type "struct stat"
-					    ))
+				(let ((attr :type "struct stat"))
 				  (if (&& (== 0 (funcall stat g_lib_library_filename &attr))
 					  (!= (slot->value lib id) (slot-value attr st_ino)))
 				      (statements
@@ -143,15 +149,38 @@
 					   (statements
 					    (funcall lib->api.unload lib->state)
 					    (funcall dlclose lib->handle)))
-				       (let ((handle :type void* :init (funcall dlopen g_lib_library_filename RTLD_NOW)))
+				       (let ((handle :type void*
+						     :init (funcall dlopen g_lib_library_filename RTLD_NOW)))
 					 (if handle
 					     (statements
 					      (setf lib->handle handle
 						    lib->id attr.st_ino)
-					      (let ((lib_api :type "const struct lib_api*" :init (funcall "reinterpret_cast<struct lib_api*>" (funcall dlsym lib->handle (string "LIB_API")))
-						      ))))
-					     ))))))
-			     ))
+					      (let ((lib_api :type "const struct lib_api*"
+							     :init
+							     (funcall "reinterpret_cast<struct lib_api*>"
+								      (funcall dlsym lib->handle
+									       (string "LIB_API")))))
+						(if (!= NULL lib_api)
+						    (statements
+						     (if (== NULL lib->state)
+							 (setf lib->state (funcall lib->api.init)))
+						     (funcall lib->api.reload lib->state))
+						    (statements
+						     (funcall dlclose lib->handle)
+						     (setf lib->handle NULL
+							   lib->id 0)))))
+					     (statements
+					      (setf lib->handle NULL
+						    lib->id 0))))))))
+		      (function (unload ((lib :type "struct plugin_view_lib*")) "static void")
+				(<< "std::cout" (string "unload") "std::endl")
+				(if lib->handle
+				    (statements
+				     (funcall lib->api.finalize lib->state)
+				     (setf lib->state NULL)
+				     (funcall dlclose lib->handle)
+				     (setf lib->handle NULL
+					   lib->id 0))))))
        
        (function (glfw_key_handler_cb ((window :type GLFWwindow*)
 				       (key :type int)
@@ -161,25 +190,36 @@
 				      "static void")
 		 (if (!= GLFW_PRESS action)
 		     (statements (return)))
-		 (if (== GLFW_KEY_ESCAPE key)
-		     (statements
+		 (case key 
+		     (GLFW_KEY_ESCAPE
+		      (setf g_app_main_loop_running GL_FALSE))
+		     (GLFW_KEY_R
 		      (funcall glfwSetWindowShouldClose window GL_TRUE)
-		      (setf g_app_main_loop_running GL_FALSE)))
+		      ))
 		 (return))
        (function (main ((argc :type int)
 			(argv :type char**))
 		       int)
-		 (macroexpand
-		  (with-glfw-window (main_window)
-		    (funcall glfwSetKeyCallback main_window glfw_key_handler_cb)
-		    (for (() (! (funcall glfwWindowShouldClose main_window)) ())
-			 (funcall glClear GL_COLOR_BUFFER_BIT)
-			 (macroexpand
-			  (with-gl-primitive GL_LINES
-			    (funcall glVertex3f 0.0 0.0 0.0)
-			    (funcall glVertex3f 1.0 1.0 1.0)))
-			 (funcall glfwSwapBuffers main_window)
-			 (funcall glfwPollEvents))))
+		 (let ((lib :type "struct plugin_view_lib" :init (list 0)))
+		   (for (() (== GL_TRUE g_app_main_loop_running) ())
+			
+			
+			(macroexpand
+			 (with-glfw-window (main_window)
+			   (funcall glfwSetKeyCallback main_window glfw_key_handler_cb)
+			   (for (() (! (funcall glfwWindowShouldClose main_window)) ())
+				(funcall plugin_view_lib_load &lib)
+				(funcall glClear GL_COLOR_BUFFER_BIT)
+				(macroexpand
+				 (with-gl-primitive GL_LINES
+				   (funcall glVertex3f 0.0 0.0 0.0)
+				   (funcall glVertex3f 1.0 1.0 1.0)))
+				(if lib.handle
+				    (if (! (funcall lib.api.step lib.state))
+					(raw "break")))
+				(funcall glfwSwapBuffers main_window)
+				(funcall glfwPollEvents)))))
+		   (funcall plugin_view_lib_unload &lib))
 		 (return 0)))))
   (sb-ext:run-program "/usr/bin/clang-format" (list "-i" (namestring *main-cpp-filename*))))
 
