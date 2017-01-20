@@ -1,4 +1,5 @@
-
+;; cmake -DCMAKE_BUILD_TYPE=Debug ../source/
+;; make VERBOSE=1
 (eval-when (:compile-toplevel :execute :load-toplevel)
   (ql:quickload :cl-cpp-generator))
 
@@ -28,6 +29,30 @@
 ;; http://nullprogram.com/blog/2015/06/06/
 ;; https://bitbucket.org/alfonse/glloadgen/wiki/Home
 ;; http://nullprogram.com/blog/2014/12/23/ Interactive Programming in C
+
+;; export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib
+;; /usr/local/lib/pahole ~/stage/gen-glfw/build/libviewlib.so
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; struct lib_api {								        ;;
+;;         class lib_state *          (*init)(void);        /*     0     8 */	        ;;
+;;         void                       (*finalize)(class lib_state *); /*     8     8 */ ;;
+;;         void                       (*reload)(class lib_state *); /*    16     8 */   ;;
+;;         void                       (*unload)(class lib_state *); /*    24     8 */   ;;
+;;         int                        (*step)(class lib_state *); /*    32     8 */     ;;
+;; 										        ;;
+;;         /* size: 40, cachelines: 1, members: 5 */				        ;;
+;;         /* last cacheline: 40 bytes */					        ;;
+;; };										        ;;
+;; struct lib_state {								        ;;
+;;         float                      r;                    /*     0     4 */	        ;;
+;; 										        ;;
+;;         /* size: 4, cachelines: 1, members: 1 */				        ;;
+;;         /* last cacheline: 4 bytes */					        ;;
+;; };										        ;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 
 (defmacro function-prefix (prefix &body body)
   `(with-compilation-unit
@@ -65,7 +90,8 @@
 	       (function ("(*unload)" ((state :type "struct lib_state*")) void))
 	       (function ("(*step)" ((state :type "struct lib_state*")) int))
 	       )
-       (decl ((LIB_API :type "extern const struct lib_api"))))))
+       (extern-c
+	(decl ((LIB_API :type "extern const struct lib_api")))))))
 
   (with-open-file (s *lib-cpp-filename*
 		    :direction :output
@@ -78,29 +104,36 @@
     `(with-compilation-unit
 	 (include "lib.h")
        (include <stdlib.h>)
+       (include <iostream>)
        (struct lib_state ()
 	       (decl ((r :type float))))
        (function (lib_init () "static struct lib_state*")
+		 (<< "std::cout" (string "lib_init") "std::endl")
 		 (let ((state :type "struct lib_state*"
-			      :init (cast "struct lib_state*"
-					  (funcall malloc (funcall sizeof *state)))))
+			      :init (funcall "reinterpret_cast<struct lib_state*>"
+					     (funcall malloc (funcall sizeof *state)))))
 		   (return state)))
        (function (lib_reload ((state :type "struct lib_state*")) "static void")
+		 (<< "std::cout" (string "lib_reload") "std::endl")
 		 (raw "//"))
        (function (lib_unload ((state :type "struct lib_state*")) "static void")
+		 (<< "std::cout" (string "lib_unload") "std::endl")
 		 (raw "//"))
 
        (function (lib_finalize ((state :type "struct lib_state*")) "static void")
+		 (<< "std::cout" (string "lib_finalize") "std::endl")
 		 (funcall free state))
        (function (lib_step ((state :type "struct lib_state*")) "static int")
+		 (<< "std::cout" (string "lib_step") "std::endl")
 		 (+= state->r .2)
 		 (return 1))
-       (decl ((LIB_API :type "const struct lib_api" :init
+       (extern-c
+	(decl ((LIB_API :type "const struct lib_api" :init
 			(list lib_init
 			      lib_finalize
 			      lib_reload
 			      lib_unload
-			      lib_step))))
+			      lib_step)))))
        )))
   (sb-ext:run-program "/usr/bin/clang-format" (list "-i" (namestring *lib-cpp-filename*)))
   (sb-ext:run-program "/usr/bin/clang-format" (list "-i" (namestring *lib-h-filename*))))
@@ -138,40 +171,68 @@
 		      (api :type "struct lib_api"
 			   )
 		      (state :type "struct lib_state*"))))
-       (decl ((g_lib_library_filename :type "const char*" :init (string "./libview.so"))))
+       (decl ((g_lib_library_filename :type "const char*" :init (string "./libviewlib.so"))))
        (macroexpand (function-prefix plugin_view_lib
 		      (function (load ((lib :type "struct plugin_view_lib*")) "static void")
 				(let ((attr :type "struct stat"))
-				  (if (&& (== 0 (funcall stat g_lib_library_filename &attr))
-					  (!= (slot->value lib id) (slot-value attr st_ino)))
+				  (if (== 0 (funcall stat g_lib_library_filename &attr))
 				      (statements
-				       (if (slot->value lib handle)
+				       (<< "std::cout" (string "stat of library success") "std::endl")
+				       (if (!= lib->id attr.st_ino)
 					   (statements
-					    (funcall lib->api.unload lib->state)
-					    (funcall dlclose lib->handle)))
-				       (let ((handle :type void*
-						     :init (funcall dlopen g_lib_library_filename RTLD_NOW)))
-					 (if handle
-					     (statements
-					      (setf lib->handle handle
-						    lib->id attr.st_ino)
-					      (let ((lib_api :type "const struct lib_api*"
-							     :init
-							     (funcall "reinterpret_cast<struct lib_api*>"
-								      (funcall dlsym lib->handle
-									       (string "LIB_API")))))
-						(if (!= NULL lib_api)
-						    (statements
-						     (if (== NULL lib->state)
-							 (setf lib->state (funcall lib->api.init)))
-						     (funcall lib->api.reload lib->state))
-						    (statements
-						     (funcall dlclose lib->handle)
-						     (setf lib->handle NULL
-							   lib->id 0)))))
-					     (statements
-					      (setf lib->handle NULL
-						    lib->id 0))))))))
+					    (<< "std::cout" (string "inode has changed") "std::endl")
+					    (if (slot->value lib handle)
+						(statements
+						 (funcall lib->api.unload lib->state)
+						 (funcall dlclose lib->handle)))
+					    (let ((handle :type void*
+							  :init (funcall dlopen g_lib_library_filename RTLD_NOW)))
+					      (if handle
+						  (statements
+						   (<< "std::cout" (string "dlopen success") "std::endl")
+						   (setf lib->handle handle
+							 lib->id attr.st_ino)
+						   (let ((lib_api :type "const struct lib_api*"
+								  :init
+								  (funcall "reinterpret_cast<struct lib_api*>"
+									   (funcall dlsym lib->handle
+										    (string "LIB_API")))))
+						     (if (!= NULL lib_api)
+							 (statements
+
+							  (<< "std::cout" (string "dlsym lib_api success: ") lib_api "std::endl")
+							  ,@(loop for e in '(init
+									     finalize
+									     reload
+									     unload
+									     step)
+								 collect
+								 `(<< "std::cout" (string "  init: ") ,(format nil "lib->api.~a" e) "std::endl"))
+							  (if (== NULL lib->state)
+							      (statements
+							       (<< "std::cout" (string "will initialize lib->state") "std::endl")
+							       (if (== 0 lib->api.init)
+								   (statements
+								    (<< "std::cout" (string "error lib->api.init points to 0") "std::endl")
+								    (return))
+								   (setf lib->state (funcall lib->api.init)))
+							       )
+							      (statements
+							       (<< "std::cout" (string "lib->state is already defined") "std::endl")))
+							  (<< "std::cout" (string "will reload lib->state") "std::endl")
+							  (funcall lib->api.reload lib->state)
+							  )
+							 (statements
+							  (<< "std::cout" (string "dlsym lib_api fail") "std::endl")
+							  (funcall dlclose lib->handle)
+							  (setf lib->handle NULL
+								lib->id 0)))))
+						  (statements
+						   (<< "std::cout" (string "dlopen fail") "std::endl")
+						   (setf lib->handle NULL
+							 lib->id 0)))))))
+				      (statements
+				       (<< "std::cout" (string "stat of library fail") "std::endl")))))
 		      (function (unload ((lib :type "struct plugin_view_lib*")) "static void")
 				(<< "std::cout" (string "unload") "std::endl")
 				(if lib->handle
@@ -202,21 +263,22 @@
 		       int)
 		 (let ((lib :type "struct plugin_view_lib" :init (list 0)))
 		   (for (() (== GL_TRUE g_app_main_loop_running) ())
-			
-			
-			(macroexpand
+			(funcall plugin_view_lib_load &lib)
+			(if lib.handle
+				    (if (! (funcall lib.api.step lib.state))
+					(raw "break")))
+			#+nil (macroexpand
 			 (with-glfw-window (main_window)
 			   (funcall glfwSetKeyCallback main_window glfw_key_handler_cb)
 			   (for (() (! (funcall glfwWindowShouldClose main_window)) ())
-				(funcall plugin_view_lib_load &lib)
+
+				
 				(funcall glClear GL_COLOR_BUFFER_BIT)
 				(macroexpand
 				 (with-gl-primitive GL_LINES
 				   (funcall glVertex3f 0.0 0.0 0.0)
 				   (funcall glVertex3f 1.0 1.0 1.0)))
-				(if lib.handle
-				    (if (! (funcall lib.api.step lib.state))
-					(raw "break")))
+				
 				(funcall glfwSwapBuffers main_window)
 				(funcall glfwPollEvents)))))
 		   (funcall plugin_view_lib_unload &lib))
