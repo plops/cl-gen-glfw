@@ -134,7 +134,7 @@
 	(function (lib_step ((state :type "struct lib_state*")) "static int")
 		  ;(macroexpand (e "call of lib_step"))
 		  (+= state->r .1)
-		  (funcall glColor3f 1.0 0.0 0.0)
+		  (funcall glColor3f 1.0 1.0 0.0)
 		  (macroexpand
 				 
 				 (with-gl-primitive GL_LINES
@@ -198,7 +198,8 @@
 		     (statements (return)))
 		 (case key 
 		     (GLFW_KEY_ESCAPE
-		      (setf g_app_main_loop_running GL_FALSE))
+		      (setf g_app_main_loop_running GL_FALSE)
+		      (funcall glfwSetWindowShouldClose window GL_TRUE))
 		     (GLFW_KEY_R
 		      (funcall glfwSetWindowShouldClose window GL_TRUE)
 		      ))
