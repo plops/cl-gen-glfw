@@ -129,7 +129,7 @@
 		  (macroexpand (e "call of lib_finalize")))
 	(function (lib_step ((state :type "struct lib_state*")) "static int")
 		  ;(macroexpand (e "call of lib_step"))
-		  (+= state->r .2)
+		  (+= state->r .1)
 		  (return 1)))
        (extern-c
 	(raw "// sequence of entries in struct: init finalize reload unload step")
