@@ -155,7 +155,7 @@
 
 				
 				(funcall glClear GL_COLOR_BUFFER_BIT)
-				(funcall glColor3f 1.0 0.0 0.0)
+				(funcall glColor3f 1.0 1.0 0.0)
 				(macroexpand
 				 (with-gl-primitive GL_LINES
 				   (funcall glVertex3f 0.0 0.0 0.0)
