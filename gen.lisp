@@ -66,6 +66,11 @@
 			     ,@function-body))
 		x)) body)))
 
+(defmacro e (&body body)
+  `(statements (<< "std::cout" ,@(loop for e in body collect
+				      (cond ((stringp e) `(string ,e))
+					    (t e))) "std::endl")))
+
 (progn
   (defparameter *lib-h-filename*  (merge-pathnames "stage/gen-glfw/source/lib.h"
 						     (user-homedir-pathname)))
@@ -92,7 +97,7 @@
 		(function ("(*step)" ((state :type "struct lib_state*")) int))
 		))
        (extern-c
-	(decl ((g_LIB_API :type "extern struct lib_api")))))))
+	(decl ((g_LIB_API :type "extern const struct lib_api")))))))
 
   (with-open-file (s *lib-cpp-filename*
 		    :direction :output
@@ -116,17 +121,14 @@
 					      (funcall malloc (funcall sizeof *state)))))
 		    (return state)))
 	(function (lib_reload ((state :type "struct lib_state*")) "static void")
-		  (<< "std::cout" (string "lib_reload") "std::endl")
-		  (raw "//"))
+		  (macroexpand (e "call of lib_reload")))
 	(function (lib_unload ((state :type "struct lib_state*")) "static void")
-		  (<< "std::cout" (string "lib_unload") "std::endl")
-		  (raw "//"))
+		  (macroexpand (e "call of lib_unload")))
 
 	(function (lib_finalize ((state :type "struct lib_state*")) "static void")
-		  (<< "std::cout" (string "lib_finalize") "std::endl")
-		  (funcall free state))
+		  (macroexpand (e "call of lib_finalize")))
 	(function (lib_step ((state :type "struct lib_state*")) "static int")
-		  (<< "std::cout" (string "lib_step") "std::endl")
+		  ;(macroexpand (e "call of lib_step"))
 		  (+= state->r .2)
 		  (return 1)))
        (extern-c
@@ -141,7 +143,7 @@
 	;; 22830:     symbol=LIB_API ;  lookup in file=./libviewlib.so [0]
 	;; 22830:     binding file ./libviewlib.so [0] to ./libviewlib.so [0]: normal symbol LIB_API
 
-	(decl ((g_LIB_API :type "struct lib_api" :init
+	(decl ((g_LIB_API :type "const struct lib_api" :init
 			(list lib_init
 			      lib_finalize
 			      lib_reload
@@ -156,10 +158,7 @@
   (sb-ext:run-program "/usr/bin/clang-format" (list "-i" (namestring *lib-h-filename*))))
 
 
-(defmacro e (&body body)
-  `(statements (<< "std::cout" ,@(loop for e in body collect
-				      (cond ((stringp e) `(string ,e))
-					    (t e))) "std::endl")))
+
 
 
 (progn
@@ -188,8 +187,7 @@
        (struct plugin_view_lib ()
 	       (decl ((handle :type void*)
 		      (id :type ino_t)
-		      (api :type "struct lib_api"
-			   )
+		      (api :type "struct lib_api")
 		      (state :type "struct lib_state*"))))
        (decl ((g_lib_library_filename :type "const char*" :init (string "./libviewlib.so"))))
        (macroexpand (function-prefix plugin_view_lib
@@ -197,7 +195,7 @@
 				(let ((attr :type "struct stat"))
 				  (if (== 0 (funcall stat g_lib_library_filename &attr))
 				      (statements
-				       (<< "std::cout" (string "stat of library success") "std::endl")
+				       ;;(<< "std::cout" (string "stat of library success") "std::endl")
 				       (if (!= lib->id attr.st_ino)
 					   (statements
 					    (<< "std::cout" (string "inode has changed") "std::endl")
@@ -212,9 +210,9 @@
 						   (<< "std::cout" (string "dlopen success") "std::endl")
 						   (setf lib->handle handle
 							 lib->id attr.st_ino)
-						   (let ((lib_api :type "struct lib_api*"
+						   (let ((lib_api :type "const struct lib_api*"
 								  :init
-								  (funcall "reinterpret_cast<struct lib_api*>"
+								  (funcall "reinterpret_cast<const struct lib_api*>"
 									   (funcall dlsym lib->handle
 										    (string "g_LIB_API"))))
 							 (lib_a :type "int*"
@@ -225,24 +223,14 @@
 						     (macroexpand (e "*lib_a=" *lib_a))
 						     (if (!= NULL lib_api)
 							 (statements
-							  
-							  (<< "std::cout" (string "dlsym lib_api success: ") lib_api "std::endl")
-							  ,@(loop for e in '(init
-									     finalize
-									     reload
-									     unload
-									     step)
-								 collect
-								 `(<< "std::cout" (string "  init: ") ,(format nil "lib_api->~a" e) "std::endl"))
+							  (setf lib->api *lib_api)
 							  (if (== NULL lib->state)
 							      (statements
 							       (<< "std::cout" (string "will initialize lib->state") "std::endl")
-							       (if (== 0 lib->api.init)
+							       (if (== 0 lib_api->init)
 								   (statements
-								    (<< "std::cout" (string "error lib->api.init points to 0") "std::endl")
 								    (return))
-								   (setf lib->state (funcall lib->api.init)))
-							       )
+								   (setf lib->state (funcall lib->api.init))))
 							      (statements
 							       (<< "std::cout" (string "lib->state is already defined") "std::endl")))
 							  (<< "std::cout" (string "will reload lib->state") "std::endl")
