@@ -111,6 +111,8 @@
 	 (include "lib.h")
        (include <stdlib.h>)
        (include <iostream>)
+       (include "GLFW/glfw3.h")
+       (decl ((g_app_main_loop_running :type int :init GL_TRUE)))
        (extern-c
 	(struct lib_state ()
 		(decl ((r :type float))))
@@ -127,9 +129,40 @@
 
 	(function (lib_finalize ((state :type "struct lib_state*")) "static void")
 		  (macroexpand (e "call of lib_finalize")))
+	(function (glfw_key_handler_cb ((window :type GLFWwindow*)
+				       (key :type int)
+				       (scancode :type int)
+				       (action :type int)
+				       (mods :type int))
+				      "static void")
+		 (if (!= GLFW_PRESS action)
+		     (statements (return)))
+		 (case key 
+		     (GLFW_KEY_ESCAPE
+		      (setf g_app_main_loop_running GL_FALSE))
+		     (GLFW_KEY_R
+		      (funcall glfwSetWindowShouldClose window GL_TRUE)
+		      ))
+		 (return))
+	
 	(function (lib_step ((state :type "struct lib_state*")) "static int")
 		  ;(macroexpand (e "call of lib_step"))
 		  (+= state->r .1)
+		  (macroexpand
+			 (with-glfw-window (main_window)
+			   (funcall glfwSetKeyCallback main_window glfw_key_handler_cb)
+			   (for (() (! (funcall glfwWindowShouldClose main_window)) ())
+
+				
+				(funcall glClear GL_COLOR_BUFFER_BIT)
+				(funcall glColor3f 1.0 0.0 0.0)
+				(macroexpand
+				 (with-gl-primitive GL_LINES
+				   (funcall glVertex3f 0.0 0.0 0.0)
+				   (funcall glVertex3f 1.0 1.0 1.0)))
+				
+				(funcall glfwSwapBuffers main_window)
+				(funcall glfwPollEvents))))
 		  (return 1)))
        (extern-c
 	(raw "// sequence of entries in struct: init finalize reload unload step")
@@ -148,12 +181,7 @@
 			      lib_finalize
 			      lib_reload
 			      lib_unload
-			      lib_step))))
-	(decl ((global_a :type int :init #x132
-
-			 
-		  ))))
-       )))
+			      lib_step))))))))
   (sb-ext:run-program "/usr/bin/clang-format" (list "-i" (namestring *lib-cpp-filename*)))
   (sb-ext:run-program "/usr/bin/clang-format" (list "-i" (namestring *lib-h-filename*))))
 
@@ -169,7 +197,6 @@
 		    :direction :output
 		    :if-exists :supersede
 		    :if-does-not-exist :create)
-					;with-output-to-string (s)
    (emit-cpp
     :str s
     :clear-env t
@@ -177,13 +204,13 @@
     :code 
     `(with-compilation-unit
 	 (include "lib.h")
-	 (include "GLFW/glfw3.h")
+	 ;; (include "GLFW/glfw3.h")
        (include <sys/types.h>)
        (include <sys/stat.h>)
        (include <dlfcn.h>)
        (include <iostream>)
        
-       (decl ((g_app_main_loop_running :type int :init GL_TRUE)))
+       
        (struct plugin_view_lib ()
 	       (decl ((handle :type void*)
 		      (id :type ino_t)
@@ -214,13 +241,7 @@
 								  :init
 								  (funcall "reinterpret_cast<const struct lib_api*>"
 									   (funcall dlsym lib->handle
-										    (string "g_LIB_API"))))
-							 (lib_a :type "int*"
-								  :init
-								  (funcall "reinterpret_cast<int*>"
-									   (funcall dlsym lib->handle
-										    (string "global_a")))))
-						     (macroexpand (e "*lib_a=" *lib_a))
+										    (string "g_LIB_API")))))
 						     (if (!= NULL lib_api)
 							 (statements
 							  (setf lib->api *lib_api)
@@ -257,44 +278,18 @@
 				     (setf lib->handle NULL
 					   lib->id 0))))))
        
-       (function (glfw_key_handler_cb ((window :type GLFWwindow*)
-				       (key :type int)
-				       (scancode :type int)
-				       (action :type int)
-				       (mods :type int))
-				      "static void")
-		 (if (!= GLFW_PRESS action)
-		     (statements (return)))
-		 (case key 
-		     (GLFW_KEY_ESCAPE
-		      (setf g_app_main_loop_running GL_FALSE))
-		     (GLFW_KEY_R
-		      (funcall glfwSetWindowShouldClose window GL_TRUE)
-		      ))
-		 (return))
+       
        (function (main ((argc :type int)
 			(argv :type char**))
 		       int)
 		 (let ((lib :type "struct plugin_view_lib" :init (list 0)))
-		   (for (() (== GL_TRUE g_app_main_loop_running) ())
+		   (for (() (;== GL_TRUE g_app_main_loop_running
+			     ) ())
 			(funcall plugin_view_lib_load &lib)
 			(if lib.handle
 				    (if (! (funcall lib.api.step lib.state))
 					(raw "break")))
-			#+nil (macroexpand
-			 (with-glfw-window (main_window)
-			   (funcall glfwSetKeyCallback main_window glfw_key_handler_cb)
-			   (for (() (! (funcall glfwWindowShouldClose main_window)) ())
-
-				
-				(funcall glClear GL_COLOR_BUFFER_BIT)
-				(macroexpand
-				 (with-gl-primitive GL_LINES
-				   (funcall glVertex3f 0.0 0.0 0.0)
-				   (funcall glVertex3f 1.0 1.0 1.0)))
-				
-				(funcall glfwSwapBuffers main_window)
-				(funcall glfwPollEvents)))))
+			)
 		   (funcall plugin_view_lib_unload &lib))
 		 (return 0)))))
   (sb-ext:run-program "/usr/bin/clang-format" (list "-i" (namestring *main-cpp-filename*))))
