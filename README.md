@@ -14,16 +14,16 @@ notably lib_step, which will redraw the window.
 - make
 - ./viewapp &
 
-# Use
+## Use
 
 - watch make
 - repeatedly edit the code of the library in gen.lisp (e.g. change arguments to glColor3f) and regenerate by pressing C-M-x. The running viewapp will see reload the recompiled library.
 
-# Keys
+## Keys
 
 - ESC .. leave wrapper
 - r .. explicitly reload library
 
-# References
+## References
 
 http://nullprogram.com/blog/2014/12/23/
