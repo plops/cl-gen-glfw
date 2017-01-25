@@ -34,25 +34,6 @@
 ;; /usr/local/lib/pahole ~/stage/gen-glfw/build/libviewlib.so
 
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; struct lib_api {								        ;;
-;;         class lib_state *          (*init)(void);        /*     0     8 */	        ;;
-;;         void                       (*finalize)(class lib_state *); /*     8     8 */ ;;
-;;         void                       (*reload)(class lib_state *); /*    16     8 */   ;;
-;;         void                       (*unload)(class lib_state *); /*    24     8 */   ;;
-;;         int                        (*step)(class lib_state *); /*    32     8 */     ;;
-;; 										        ;;
-;;         /* size: 40, cachelines: 1, members: 5 */				        ;;
-;;         /* last cacheline: 40 bytes */					        ;;
-;; };										        ;;
-;; struct lib_state {								        ;;
-;;         float                      r;                    /*     0     4 */	        ;;
-;; 										        ;;
-;;         /* size: 4, cachelines: 1, members: 1 */				        ;;
-;;         /* last cacheline: 4 bytes */					        ;;
-;; };										        ;;
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
 
 (defmacro function-prefix (prefix &body body)
   `(with-compilation-unit
