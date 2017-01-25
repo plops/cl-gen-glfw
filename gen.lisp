@@ -156,7 +156,8 @@
   (sb-ext:run-program "/usr/bin/clang-format" (list "-i" (namestring *lib-h-filename*))))
 
 
-
+(defmacro e (&body body)
+  `(statements (<< "std::cout" ,@body "std::endl")))
 
 
 (progn
@@ -219,6 +220,7 @@
 								  (funcall "reinterpret_cast<int*>"
 									   (funcall dlsym lib->handle
 										    (string "global_a")))))
+						     (macroexpand (e (string "*lib_a=") *lib_a))
 						     (if (!= NULL lib_api)
 							 (statements
 
