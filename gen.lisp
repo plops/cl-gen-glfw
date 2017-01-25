@@ -83,15 +83,16 @@
     `(with-compilation-unit
 	 (raw "#pragma once")
        (statements (raw "struct lib_state"))
-       (struct lib_api ()
-	       (function ("(*init)" () "struct lib_state*"))
-	       (function ("(*finalize)" ((state :type "struct lib_state*")) void))
-	       (function ("(*reload)" ((state :type "struct lib_state*")) void))
-	       (function ("(*unload)" ((state :type "struct lib_state*")) void))
-	       (function ("(*step)" ((state :type "struct lib_state*")) int))
-	       )
        (extern-c
-	(decl ((LIB_API :type "extern const struct lib_api")))))))
+	(struct lib_api ()
+		(function ("(*init)" () "struct lib_state*"))
+		(function ("(*finalize)" ((state :type "struct lib_state*")) void))
+		(function ("(*reload)" ((state :type "struct lib_state*")) void))
+		(function ("(*unload)" ((state :type "struct lib_state*")) void))
+		(function ("(*step)" ((state :type "struct lib_state*")) int))
+		))
+       (extern-c
+	(decl ((LIB_API :type "extern struct lib_api")))))))
 
   (with-open-file (s *lib-cpp-filename*
 		    :direction :output
@@ -105,30 +106,39 @@
 	 (include "lib.h")
        (include <stdlib.h>)
        (include <iostream>)
-       (struct lib_state ()
-	       (decl ((r :type float))))
-       (function (lib_init () "static struct lib_state*")
-		 (<< "std::cout" (string "lib_init") "std::endl")
-		 (let ((state :type "struct lib_state*"
-			      :init (funcall "reinterpret_cast<struct lib_state*>"
-					     (funcall malloc (funcall sizeof *state)))))
-		   (return state)))
-       (function (lib_reload ((state :type "struct lib_state*")) "static void")
-		 (<< "std::cout" (string "lib_reload") "std::endl")
-		 (raw "//"))
-       (function (lib_unload ((state :type "struct lib_state*")) "static void")
-		 (<< "std::cout" (string "lib_unload") "std::endl")
-		 (raw "//"))
-
-       (function (lib_finalize ((state :type "struct lib_state*")) "static void")
-		 (<< "std::cout" (string "lib_finalize") "std::endl")
-		 (funcall free state))
-       (function (lib_step ((state :type "struct lib_state*")) "static int")
-		 (<< "std::cout" (string "lib_step") "std::endl")
-		 (+= state->r .2)
-		 (return 1))
        (extern-c
-	(decl ((LIB_API :type "const struct lib_api" :init
+	(struct lib_state ()
+		(decl ((r :type float))))
+	(function (lib_init () "static struct lib_state*")
+		  (<< "std::cout" (string "lib_init") "std::endl")
+		  (let ((state :type "struct lib_state*"
+			       :init (funcall "reinterpret_cast<struct lib_state*>"
+					      (funcall malloc (funcall sizeof *state)))))
+		    (return state)))
+	(function (lib_reload ((state :type "struct lib_state*")) "static void")
+		  (<< "std::cout" (string "lib_reload") "std::endl")
+		  (raw "//"))
+	(function (lib_unload ((state :type "struct lib_state*")) "static void")
+		  (<< "std::cout" (string "lib_unload") "std::endl")
+		  (raw "//"))
+
+	(function (lib_finalize ((state :type "struct lib_state*")) "static void")
+		  (<< "std::cout" (string "lib_finalize") "std::endl")
+		  (funcall free state))
+	(function (lib_step ((state :type "struct lib_state*")) "static int")
+		  (<< "std::cout" (string "lib_step") "std::endl")
+		  (+= state->r .2)
+		  (return 1)))
+       (extern-c
+	(raw "// sequence of entries in struct: init finalize reload unload step")
+
+        ;; The One Definition Rule (ODR) still applies, meaning that
+	;; you can only have one definition of the global variable
+	;; visible at link-time (static or dynamic linking).
+	;; http://stackoverflow.com/questions/19373061/what-happens-to-global-and-static-variables-in-a-shared-library-when-it-is-dynam
+	;; http://www.bnikolic.co.uk/blog/linux-ld-debug.html
+	;; LD_DEBUG=all ./viewapp 
+	(decl ((LIB_API :type "struct lib_api" :init
 			(list lib_init
 			      lib_finalize
 			      lib_reload
