@@ -112,7 +112,7 @@
        (include <stdlib.h>)
        (include <iostream>)
        (include "GLFW/glfw3.h")
-       (decl ((g_app_main_loop_running :type int :init GL_TRUE)))
+       
        (extern-c
 	(struct lib_state ()
 		(decl ((r :type float))))
@@ -129,40 +129,17 @@
 
 	(function (lib_finalize ((state :type "struct lib_state*")) "static void")
 		  (macroexpand (e "call of lib_finalize")))
-	(function (glfw_key_handler_cb ((window :type GLFWwindow*)
-				       (key :type int)
-				       (scancode :type int)
-				       (action :type int)
-				       (mods :type int))
-				      "static void")
-		 (if (!= GLFW_PRESS action)
-		     (statements (return)))
-		 (case key 
-		     (GLFW_KEY_ESCAPE
-		      (setf g_app_main_loop_running GL_FALSE))
-		     (GLFW_KEY_R
-		      (funcall glfwSetWindowShouldClose window GL_TRUE)
-		      ))
-		 (return))
+	
 	
 	(function (lib_step ((state :type "struct lib_state*")) "static int")
 		  ;(macroexpand (e "call of lib_step"))
 		  (+= state->r .1)
+		  (funcall glColor3f 1.0 0.0 0.0)
 		  (macroexpand
-			 (with-glfw-window (main_window)
-			   (funcall glfwSetKeyCallback main_window glfw_key_handler_cb)
-			   (for (() (! (funcall glfwWindowShouldClose main_window)) ())
-
-				
-				(funcall glClear GL_COLOR_BUFFER_BIT)
-				(funcall glColor3f 1.0 1.0 0.0)
-				(macroexpand
+				 
 				 (with-gl-primitive GL_LINES
 				   (funcall glVertex3f 0.0 0.0 0.0)
 				   (funcall glVertex3f 1.0 1.0 1.0)))
-				
-				(funcall glfwSwapBuffers main_window)
-				(funcall glfwPollEvents))))
 		  (return 1)))
        (extern-c
 	(raw "// sequence of entries in struct: init finalize reload unload step")
@@ -204,13 +181,28 @@
     :code 
     `(with-compilation-unit
 	 (include "lib.h")
-	 ;; (include "GLFW/glfw3.h")
+	 (include "GLFW/glfw3.h")
        (include <sys/types.h>)
        (include <sys/stat.h>)
        (include <dlfcn.h>)
        (include <iostream>)
        
-       
+       (decl ((g_app_main_loop_running :type int :init GL_TRUE)))
+       (function (glfw_key_handler_cb ((window :type GLFWwindow*)
+				       (key :type int)
+				       (scancode :type int)
+				       (action :type int)
+				       (mods :type int))
+				      "static void")
+		 (if (!= GLFW_PRESS action)
+		     (statements (return)))
+		 (case key 
+		     (GLFW_KEY_ESCAPE
+		      (setf g_app_main_loop_running GL_FALSE))
+		     (GLFW_KEY_R
+		      (funcall glfwSetWindowShouldClose window GL_TRUE)
+		      ))
+		 (return))
        (struct plugin_view_lib ()
 	       (decl ((handle :type void*)
 		      (id :type ino_t)
@@ -283,12 +275,26 @@
 			(argv :type char**))
 		       int)
 		 (let ((lib :type "struct plugin_view_lib" :init (list 0)))
-		   (for (() (;== GL_TRUE g_app_main_loop_running
+		   (for (() (== GL_TRUE g_app_main_loop_running
 			     ) ())
-			(funcall plugin_view_lib_load &lib)
-			(if lib.handle
+			
+			(macroexpand
+			 (with-glfw-window (main_window)
+			   (funcall glfwSetKeyCallback main_window glfw_key_handler_cb)
+			   (for (() (! (funcall glfwWindowShouldClose main_window)) ())
+
+				
+				(funcall glClear GL_COLOR_BUFFER_BIT)
+				
+				(funcall plugin_view_lib_load &lib)
+				(if lib.handle
 				    (if (! (funcall lib.api.step lib.state))
 					(raw "break")))
+				
+				
+				(funcall glfwSwapBuffers main_window)
+				(funcall glfwPollEvents))))
+			
 			)
 		   (funcall plugin_view_lib_unload &lib))
 		 (return 0)))))
