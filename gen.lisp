@@ -92,7 +92,7 @@
 		(function ("(*step)" ((state :type "struct lib_state*")) int))
 		))
        (extern-c
-	(decl ((LIB_API :type "extern struct lib_api")))))))
+	(decl ((g_LIB_API :type "extern struct lib_api")))))))
 
   (with-open-file (s *lib-cpp-filename*
 		    :direction :output
@@ -137,13 +137,20 @@
 	;; visible at link-time (static or dynamic linking).
 	;; http://stackoverflow.com/questions/19373061/what-happens-to-global-and-static-variables-in-a-shared-library-when-it-is-dynam
 	;; http://www.bnikolic.co.uk/blog/linux-ld-debug.html
-	;; LD_DEBUG=all ./viewapp 
-	(decl ((LIB_API :type "struct lib_api" :init
+	;; LD_DEBUG=all ./viewapp
+	;; 22830:     symbol=LIB_API ;  lookup in file=./libviewlib.so [0]
+	;; 22830:     binding file ./libviewlib.so [0] to ./libviewlib.so [0]: normal symbol LIB_API
+
+	(decl ((g_LIB_API :type "struct lib_api" :init
 			(list lib_init
 			      lib_finalize
 			      lib_reload
 			      lib_unload
-			      lib_step)))))
+			      lib_step))))
+	(decl ((global_a :type int :init #x132
+
+			 
+		  ))))
        )))
   (sb-ext:run-program "/usr/bin/clang-format" (list "-i" (namestring *lib-cpp-filename*)))
   (sb-ext:run-program "/usr/bin/clang-format" (list "-i" (namestring *lib-h-filename*))))
@@ -202,11 +209,16 @@
 						   (<< "std::cout" (string "dlopen success") "std::endl")
 						   (setf lib->handle handle
 							 lib->id attr.st_ino)
-						   (let ((lib_api :type "const struct lib_api*"
+						   (let ((lib_api :type "struct lib_api*"
 								  :init
 								  (funcall "reinterpret_cast<struct lib_api*>"
 									   (funcall dlsym lib->handle
-										    (string "LIB_API")))))
+										    (string "g_LIB_API"))))
+							 (lib_a :type "int*"
+								  :init
+								  (funcall "reinterpret_cast<int*>"
+									   (funcall dlsym lib->handle
+										    (string "global_a")))))
 						     (if (!= NULL lib_api)
 							 (statements
 
