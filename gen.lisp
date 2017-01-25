@@ -157,7 +157,9 @@
 
 
 (defmacro e (&body body)
-  `(statements (<< "std::cout" ,@body "std::endl")))
+  `(statements (<< "std::cout" ,@(loop for e in body collect
+				      (cond ((stringp e) `(string ,e))
+					    (t e))) "std::endl")))
 
 
 (progn
@@ -220,10 +222,10 @@
 								  (funcall "reinterpret_cast<int*>"
 									   (funcall dlsym lib->handle
 										    (string "global_a")))))
-						     (macroexpand (e (string "*lib_a=") *lib_a))
+						     (macroexpand (e "*lib_a=" *lib_a))
 						     (if (!= NULL lib_api)
 							 (statements
-
+							  
 							  (<< "std::cout" (string "dlsym lib_api success: ") lib_api "std::endl")
 							  ,@(loop for e in '(init
 									     finalize
@@ -231,7 +233,7 @@
 									     unload
 									     step)
 								 collect
-								 `(<< "std::cout" (string "  init: ") ,(format nil "lib->api.~a" e) "std::endl"))
+								 `(<< "std::cout" (string "  init: ") ,(format nil "lib_api->~a" e) "std::endl"))
 							  (if (== NULL lib->state)
 							      (statements
 							       (<< "std::cout" (string "will initialize lib->state") "std::endl")
